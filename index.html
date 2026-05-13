@@ -10,6 +10,53 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+ 
+const firebaseConfig = {
+  apiKey: "AIzaSyC6p-nj7cTyXHwBciocO842BSM8TWvg4lM",
+  authDomain: "new-yorkers.firebaseapp.com",
+  projectId: "new-yorkers",
+  storageBucket: "new-yorkers.firebasestorage.app",
+  messagingSenderId: "923049140533",
+  appId: "1:923049140533:web:91ab1bf53c32c678c86c7c"
+};
+ 
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
+const colRef = collection(db, 'properties');
+ 
+// Expose db functions to global scope
+window._db = db;
+window._colRef = colRef;
+window._addDoc = addDoc;
+window._updateDoc = updateDoc;
+window._deleteDoc = deleteDoc;
+window._doc = doc;
+window._setDoc = setDoc;
+window._onSnapshot = onSnapshot;
+ 
+// Start listening once map is ready
+window.addEventListener('mapReady', () => {
+  onSnapshot(colRef, (snapshot) => {
+    properties = [];
+    // Remove all existing markers
+    Object.keys(markers).forEach(id => {
+      if(markers[id]) window._map.removeLayer(markers[id]);
+    });
+    markers = {};
+    snapshot.forEach(docSnap => {
+      const p = { id: docSnap.id, ...docSnap.data() };
+      p.photos = p.photos || [];
+      properties.push(p);
+      addMarker(p);
+    });
+    renderList();
+    showToast('');
+  });
+});
+</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -21,7 +68,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .app{display:flex;flex-direction:column;height:100%;height:100dvh}
  
 /* TOP BAR */
-.topbar{background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:10px 12px 10px;padding-top:calc(env(safe-area-inset-top) + 10px);gap:8px;flex-shrink:0;z-index:1000}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:10px 12px;padding-top:calc(env(safe-area-inset-top) + 10px);gap:8px;flex-shrink:0;z-index:1000}
 .logo{font-size:15px;font-weight:700;color:var(--accent);white-space:nowrap}
 .search-wrap{flex:1;position:relative;min-width:0}
 .search-wrap input{width:100%;background:var(--surface2);border:1.5px solid var(--border2);border-radius:22px;padding:10px 34px 10px 16px;color:var(--text);font-size:16px;outline:none;-webkit-appearance:none;caret-color:var(--accent)}
@@ -56,8 +103,15 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .panel-close{width:30px;height:30px;border-radius:50%;border:none;background:var(--surface2);color:var(--text2);font-size:16px;cursor:pointer}
 .panel-body{overflow-y:auto;flex:1;padding:14px;-webkit-overflow-scrolling:touch}
  
+/* SYNC INDICATOR */
+.sync-dot{width:8px;height:8px;border-radius:50%;background:var(--text3);flex-shrink:0;transition:background .3s}
+.sync-dot.syncing{background:#f5a623;animation:pulse 1s infinite}
+.sync-dot.synced{background:#2eb87a}
+.sync-dot.error{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+ 
 /* LIST */
-.prop-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.prop-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px;cursor:pointer}
 .prop-card:active{opacity:.8}
 .prop-card-header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px}
 .prop-addr{font-size:13px;font-weight:600;color:var(--text);line-height:1.3;flex:1}
@@ -72,7 +126,11 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .prop-price{font-size:15px;font-weight:700;color:var(--accent);margin-top:4px}
 .prop-thumbs{display:flex;gap:4px;margin-top:8px}
 .prop-thumbs img{width:44px;height:34px;object-fit:cover;border-radius:5px;border:1px solid var(--border)}
-.empty{text-align:center;padding:40px 16px;color:var(--text3);font-size:13px}
+.empty{text-align:center;padding:40px 16px;color:var(--text3);font-size:13px;line-height:1.8}
+.stats-row{display:flex;gap:8px;margin-bottom:12px}
+.stat-card{flex:1;background:var(--surface2);border-radius:8px;padding:10px;text-align:center}
+.stat-val{font-size:16px;font-weight:700;color:var(--text)}
+.stat-lbl{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
  
 /* FILTERS */
 .f-row{display:flex;gap:8px;margin-bottom:10px}
@@ -82,10 +140,6 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .f-group select option{background:var(--surface)}
 .range-row{display:flex;gap:6px;align-items:center}
 .range-sep{color:var(--text3);font-size:12px}
-.stats-row{display:flex;gap:8px;margin-bottom:12px}
-.stat-card{flex:1;background:var(--surface2);border-radius:8px;padding:10px;text-align:center}
-.stat-val{font-size:16px;font-weight:700;color:var(--text)}
-.stat-lbl{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
  
 /* FORM MODAL */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9000;display:flex;align-items:flex-end;opacity:0;pointer-events:none;transition:opacity .2s}
@@ -105,7 +159,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .fg select option{background:var(--surface)}
 .fg textarea{resize:none;height:80px;line-height:1.5}
 .status-opts{display:flex;gap:8px;flex-wrap:wrap}
-.sopt{flex:1;min-width:calc(50% - 4px);padding:10px 4px;border-radius:10px;border:1.5px solid var(--border);text-align:center;font-size:13px;font-weight:600;cursor:pointer;color:var(--text3);-webkit-tap-highlight-color:transparent}
+.sopt{flex:1;min-width:calc(50% - 4px);padding:10px 4px;border-radius:10px;border:1.5px solid var(--border);text-align:center;font-size:13px;font-weight:600;cursor:pointer;color:var(--text3)}
 .sopt.sel0{border-color:#4f7cff;background:rgba(79,124,255,.15);color:#7aa3ff}
 .sopt.sel1{border-color:#2eb87a;background:rgba(46,184,122,.15);color:#3dd68c}
 .sopt.sel2{border-color:#e05252;background:rgba(224,82,82,.15);color:#e07070}
@@ -116,22 +170,21 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .photo-prev img{width:100%;height:100%;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
 .photo-del{position:absolute;top:-6px;right:-6px;width:20px;height:20px;background:var(--red);border-radius:50%;border:none;color:#fff;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .modal-footer{padding:14px 16px;border-top:1px solid var(--border);display:flex;gap:10px;flex-shrink:0}
-.btn{display:flex;align-items:center;justify-content:center;gap:6px;padding:14px 16px;border-radius:14px;border:1.5px solid var(--border2);background:transparent;color:var(--text2);font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent;flex:1}
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;padding:14px 16px;border-radius:14px;border:1.5px solid var(--border2);background:transparent;color:var(--text2);font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;flex:1}
 .btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
 .btn-danger{border-color:var(--red);color:var(--red)}
 .btn:active{opacity:.75}
  
-/* VIEW MODAL */
-.view-section{margin-bottom:14px}
-.view-section-title{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px}
-.view-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+/* VIEW */
+.view-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
 .view-info-item{background:var(--surface2);border-radius:8px;padding:10px}
 .view-info-label{font-size:11px;color:var(--text3);margin-bottom:2px}
 .view-info-val{font-size:14px;font-weight:600;color:var(--text)}
-.view-price{font-size:26px;font-weight:800;color:var(--accent);margin-bottom:4px}
-.view-notes{background:var(--surface2);border-radius:8px;padding:12px;font-size:13px;color:var(--text2);line-height:1.6}
-.gallery{display:flex;flex-wrap:wrap;gap:6px}
+.view-price{font-size:26px;font-weight:800;color:var(--accent);margin-bottom:12px}
+.view-notes{background:var(--surface2);border-radius:8px;padding:12px;font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:12px}
+.gallery{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .gallery img{height:72px;width:auto;border-radius:8px;object-fit:cover;cursor:pointer}
+.view-section-title{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px}
  
 /* LIGHTBOX */
 .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:99999;display:none;align-items:center;justify-content:center}
@@ -164,7 +217,6 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 </head>
 <body>
 <div class="app">
- 
   <!-- TOP BAR -->
   <div class="topbar">
     <div class="logo">🏙 NY</div>
@@ -173,7 +225,8 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
       <button class="search-clear" id="search-clear" onclick="clearSearch()">✕</button>
       <div id="search-results"></div>
     </div>
-    <button class="topbar-btn" onclick="openAddModal()" title="Νέο ακίνητο" style="background:var(--accent);border-color:var(--accent);color:#fff;font-size:18px">+</button>
+    <div class="sync-dot" id="sync-dot" title="Σύνδεση"></div>
+    <button class="topbar-btn" onclick="openAddModal()">+</button>
   </div>
  
   <!-- MAP -->
@@ -227,7 +280,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
   <div class="panel" id="panel-filters">
     <div class="panel-handle"></div>
     <div class="panel-header">
-      <div class="panel-title">Φίλτρα & Ταξινόμηση</div>
+      <div class="panel-title">Φίλτρα</div>
       <button class="panel-close" onclick="closePanel('filters')">✕</button>
     </div>
     <div class="panel-body">
@@ -344,8 +397,8 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-danger" id="del-btn" style="display:none;flex:0 0 auto" onclick="deleteProperty()">🗑</button>
-      <button class="btn" onclick="closeEditModal()" style="flex:0 0 auto;padding:12px 20px">Ακύρωση</button>
+      <button class="btn btn-danger" id="del-btn" style="display:none;flex:0 0 auto;padding:14px 18px" onclick="deleteProperty()">🗑</button>
+      <button class="btn" onclick="closeEditModal()" style="flex:0 0 auto;padding:14px 20px">Ακύρωση</button>
       <button class="btn btn-primary" onclick="saveProperty()">💾 Αποθήκευση</button>
     </div>
   </div>
@@ -385,27 +438,13 @@ let pendingLatLng=null;
 let map;
 let locatorPin=null;
  
-// STORAGE
-function save(){
-  try{
-    const d=properties.map(p=>({...p,photos:[]}));
-    localStorage.setItem('ny-props',JSON.stringify(d));
-    properties.forEach(p=>{
-      if(p.photos&&p.photos.length) localStorage.setItem('ny-photos-'+p.id,JSON.stringify(p.photos));
-    });
-  }catch(e){}
-}
-function load(){
-  try{
-    const d=localStorage.getItem('ny-props');
-    if(d){
-      properties=JSON.parse(d);
-      properties.forEach(p=>{
-        try{const ph=localStorage.getItem('ny-photos-'+p.id);p.photos=ph?JSON.parse(ph):[];}
-        catch(e){p.photos=[];}
-      });
-    }
-  }catch(e){}
+const SL=['Υπό Εξέταση','Ενδιαφέρον','Απορρίφθηκε','Πουλήθηκε'];
+const SC=['s0','s1','s2','s3'];
+ 
+// SYNC DOT
+function setSyncStatus(s){
+  const d=document.getElementById('sync-dot');
+  d.className='sync-dot '+s;
 }
  
 // MAP
@@ -415,6 +454,9 @@ function initMap(){
     attribution:'© OpenStreetMap',maxZoom:19
   }).addTo(map);
   map.on('click',function(e){pendingLatLng=e.latlng;openAddModal(e.latlng);});
+  window._map=map;
+  window.dispatchEvent(new Event('mapReady'));
+  setSyncStatus('syncing');
 }
  
 function pinIcon(status){
@@ -433,6 +475,23 @@ function addMarker(p){
 }
 function removeMarker(id){if(markers[id]){map.removeLayer(markers[id]);delete markers[id];}}
 function updateMarker(p){removeMarker(p.id);addMarker(p);}
+ 
+// FIREBASE SAVE/DELETE
+async function fbSave(prop){
+  setSyncStatus('syncing');
+  try{
+    const {id, ...data}=prop;
+    await window._setDoc(window._doc(window._db,'properties',id), data);
+    setSyncStatus('synced');
+  }catch(e){setSyncStatus('error');showToast('Σφάλμα αποθήκευσης');}
+}
+async function fbDelete(id){
+  setSyncStatus('syncing');
+  try{
+    await window._deleteDoc(window._doc(window._db,'properties',id));
+    setSyncStatus('synced');
+  }catch(e){setSyncStatus('error');showToast('Σφάλμα διαγραφής');}
+}
  
 // NAV
 function showNav(tab){
@@ -577,52 +636,51 @@ function renderPhotoPreviews(){
 }
 function removePhoto(i){editPhotos.splice(i,1);renderPhotoPreviews();}
  
-// SAVE/DELETE
-function saveProperty(){
+// SAVE / DELETE
+async function saveProperty(){
   const addr=document.getElementById('f-address').value.trim();
   if(!addr){showToast('Παρακαλώ εισάγετε διεύθυνση');return;}
-  if(editingId){
-    const p=properties.find(x=>x.id===editingId);if(!p)return;
-    p.date=document.getElementById('f-date').value;
-    p.address=addr;p.price=document.getElementById('f-price').value;
-    p.sqm=document.getElementById('f-sqm').value;p.floor=document.getElementById('f-floor-inp').value;
-    p.elevator=document.getElementById('f-elev').value;p.owner=document.getElementById('f-owner').value;
-    p.phone=document.getElementById('f-phone').value;p.notes=document.getElementById('f-notes').value;
-    p.streetview=document.getElementById('f-streetview').value;p.status=selectedStatus;p.photos=[...editPhotos];
-    updateMarker(p);save();renderList();closeEditModal();showToast('Ενημερώθηκε ✓');
-  } else {
-    const ll=pendingLatLng||{lat:40.6401,lng:22.9444};
-    const id='p'+Date.now();
-    const prop={id,lat:ll.lat,lng:ll.lng,date:document.getElementById('f-date').value,address:addr,
-      price:document.getElementById('f-price').value,sqm:document.getElementById('f-sqm').value,
-      floor:document.getElementById('f-floor-inp').value,elevator:document.getElementById('f-elev').value,
-      owner:document.getElementById('f-owner').value,phone:document.getElementById('f-phone').value,
-      notes:document.getElementById('f-notes').value,streetview:document.getElementById('f-streetview').value,
-      status:selectedStatus,photos:[...editPhotos]};
-    if(!pendingLatLng){
-      geocodeAddr(addr).then(ll2=>{
-        if(ll2){prop.lat=ll2.lat;prop.lng=ll2.lng;}
-        properties.push(prop);addMarker(prop);save();renderList();map.setView([prop.lat,prop.lng],16);
-      });
-    } else {properties.push(prop);addMarker(prop);save();renderList();}
-    closeEditModal();showToast('Προστέθηκε ✓');
+  const id=editingId||('p'+Date.now());
+  const ll=pendingLatLng||{lat:40.6401,lng:22.9444};
+  const prop={
+    id,
+    lat: editingId ? (properties.find(x=>x.id===editingId)?.lat||ll.lat) : ll.lat,
+    lng: editingId ? (properties.find(x=>x.id===editingId)?.lng||ll.lng) : ll.lng,
+    date:document.getElementById('f-date').value,
+    address:addr,
+    price:document.getElementById('f-price').value,
+    sqm:document.getElementById('f-sqm').value,
+    floor:document.getElementById('f-floor-inp').value,
+    elevator:document.getElementById('f-elev').value,
+    owner:document.getElementById('f-owner').value,
+    phone:document.getElementById('f-phone').value,
+    notes:document.getElementById('f-notes').value,
+    streetview:document.getElementById('f-streetview').value,
+    status:selectedStatus,
+    photos:[...editPhotos]
+  };
+  if(!editingId && !pendingLatLng){
+    const ll2=await geocodeAddr(addr);
+    if(ll2){prop.lat=ll2.lat;prop.lng=ll2.lng;}
   }
+  closeEditModal();
+  showToast(editingId?'Αποθήκευση...':'Προσθήκη...');
+  await fbSave(prop);
 }
-function deleteProperty(){
+async function deleteProperty(){
   if(!editingId)return;
   if(!confirm('Διαγραφή;'))return;
-  removeMarker(editingId);properties=properties.filter(x=>x.id!==editingId);
-  save();renderList();closeEditModal();showToast('Διαγράφηκε');
+  const id=editingId;
+  closeEditModal();
+  await fbDelete(id);
 }
  
 // VIEW MODAL
-const SL=['Υπό Εξέταση','Ενδιαφέρον','Απορρίφθηκε','Πουλήθηκε'];
-const SC=['s0','s1','s2','s3'];
 function showViewModal(id){
   const p=properties.find(x=>x.id===id);if(!p)return;
   let photos='';
   if(p.photos&&p.photos.length){
-    photos=`<div class="view-section"><div class="view-section-title">Φωτογραφίες</div>
+    photos=`<div style="margin-bottom:12px"><div class="view-section-title">Φωτογραφίες</div>
     <div class="gallery">${p.photos.map((s,i)=>`<img src="${s}" onclick="openLightbox('${p.id}',${i})">`).join('')}</div></div>`;
   }
   document.getElementById('view-modal-body').innerHTML=`
@@ -632,17 +690,17 @@ function showViewModal(id){
     </div>
     <div style="font-size:12px;color:var(--text3);margin-bottom:12px">📅 ${p.date||'—'}</div>
     ${p.price?`<div class="view-price">€${Number(p.price).toLocaleString('el-GR')}</div>`:''}
-    <div class="view-info-grid" style="margin-bottom:14px">
+    <div class="view-info-grid">
       <div class="view-info-item"><div class="view-info-label">Τ.μ.</div><div class="view-info-val">${p.sqm?p.sqm+' τ.μ.':'—'}</div></div>
       <div class="view-info-item"><div class="view-info-label">Όροφος</div><div class="view-info-val">${p.floor||'—'}</div></div>
       <div class="view-info-item"><div class="view-info-label">Ασανσέρ</div><div class="view-info-val">${p.elevator||'—'}</div></div>
       <div class="view-info-item"><div class="view-info-label">Τύπος</div><div class="view-info-val">${p.owner||'—'}</div></div>
       ${p.phone?`<div class="view-info-item" style="grid-column:1/-1"><div class="view-info-label">Τηλέφωνο</div><div class="view-info-val"><a href="tel:${p.phone}" style="color:var(--accent)">${p.phone}</a></div></div>`:''}
     </div>
-    ${p.notes?`<div class="view-section"><div class="view-section-title">Σημειώσεις</div><div class="view-notes">${p.notes}</div></div>`:''}
-    ${p.streetview?`<a href="${p.streetview}" target="_blank" class="btn" style="margin-bottom:12px;text-decoration:none">🌍 Άνοιγμα Street View</a>`:''}
+    ${p.notes?`<div style="margin-bottom:12px"><div class="view-section-title">Σημειώσεις</div><div class="view-notes">${p.notes}</div></div>`:''}
+    ${p.streetview?`<a href="${p.streetview}" target="_blank" class="btn" style="margin-bottom:12px;text-decoration:none;display:flex">🌍 Street View</a>`:''}
     ${photos}
-    ${p.sqm&&p.price?`<div style="font-size:12px;color:var(--text3);margin-top:8px">Τιμή/τ.μ.: <strong style="color:var(--text2)">€${Math.round(p.price/p.sqm).toLocaleString('el-GR')}</strong></div>`:''}
+    ${p.sqm&&p.price?`<div style="font-size:12px;color:var(--text3);margin-top:4px">Τιμή/τ.μ.: <strong style="color:var(--text2)">€${Math.round(p.price/p.sqm).toLocaleString('el-GR')}</strong></div>`:''}
   `;
   document.getElementById('view-edit-btn').onclick=()=>openEditModal(id);
   document.getElementById('view-modal').classList.add('open');
@@ -659,7 +717,7 @@ function openLightbox(pid,idx){
 }
 function closeLightbox(){document.getElementById('lightbox').classList.remove('open');}
  
-// LIST
+// LIST & FILTERS
 function getFiltered(){
   let list=[...properties];
   const fs=document.getElementById('f-status')?.value;
@@ -729,6 +787,7 @@ function renderList(){
   document.getElementById('s-total').textContent=properties.length;
   document.getElementById('s-avg-price').textContent=prices.length?'€'+Math.round(prices.reduce((a,b)=>a+b,0)/prices.length).toLocaleString('el-GR'):'—';
   document.getElementById('s-avg-sqm').textContent=sqms.length?Math.round(sqms.reduce((a,b)=>a+b,0)/sqms.length)+'τ.μ.':'—';
+  setSyncStatus('synced');
 }
  
 // LOCATE
@@ -749,16 +808,14 @@ function exportExcel(){
  
 // TOAST
 function showToast(msg){
+  if(!msg)return;
   const t=document.getElementById('toast');
   t.textContent=msg;t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'),2500);
 }
  
 // INIT
-load();
 initMap();
-properties.forEach(p=>addMarker(p));
-renderList();
 </script>
 </body>
 </html>

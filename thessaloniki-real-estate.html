@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thessaloniki Real Estate Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;
+  --surface:#1a1d26;
+  --surface2:#22263a;
+  --surface3:#2a2f45;
+  --border:#2e3350;
+  --border2:#3a4060;
+  --text:#f0f2ff;
+  --text2:#9ba3c8;
+  --text3:#6370a0;
+  --accent:#4f7cff;
+  --accent2:#3d63d4;
+  --green:#2eb87a;
+  --amber:#f5a623;
+  --red:#e05252;
+  --radius:10px;
+  --radius-lg:16px;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+/* TOP BAR */
+.topbar{height:56px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:12px;flex-shrink:0;z-index:1000}
+.topbar-logo{font-family:'DM Serif Display',serif;font-size:18px;color:var(--accent);white-space:nowrap;letter-spacing:0.3px}
+.topbar-logo span{color:var(--text2);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:400;margin-left:6px}
+.search-wrap{flex:1;max-width:420px;position:relative}
+.search-wrap input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 14px 8px 36px;color:var(--text);font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:border .2s}
+.search-wrap input:focus{border-color:var(--accent)}
+.search-wrap .si{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:15px}
+#search-results{position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:none;border-radius:12px;overflow:hidden;z-index:9999;max-height:280px;overflow-y:auto;display:none;box-shadow:0 4px 24px rgba(0,0,0,0.18)}
+#search-results .sr-item{display:flex;align-items:flex-start;gap:12px;padding:11px 14px;cursor:pointer;border-bottom:1px solid #f0f0f0}
+#search-results .sr-item:last-child{border-bottom:none}
+#search-results .sr-item:hover{background:#f5f5f5}
+#search-results .sr-icon{width:32px;height:32px;background:#ececec;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;margin-top:1px}
+#search-results .sr-main{flex:1;min-width:0}
+#search-results .sr-name{font-size:14px;color:#202124;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#search-results .sr-sub{font-size:12px;color:#70757a;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar-actions{display:flex;gap:8px;margin-left:auto}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--radius);border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:13px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn:hover{background:var(--surface2);color:var(--text);border-color:var(--accent)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent2);border-color:var(--accent2);color:#fff}
+.btn-icon{padding:7px;gap:0}
+
+/* LAYOUT */
+.main{display:flex;flex:1;overflow:hidden}
+
+/* SIDEBAR */
+.sidebar{width:340px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;transition:width .3s}
+.sidebar.collapsed{width:0}
+.sidebar-inner{width:340px;display:flex;flex-direction:column;height:100%;overflow:hidden}
+.sidebar-header{padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sidebar-tabs{display:flex;gap:4px;margin-top:10px}
+.tab{flex:1;text-align:center;padding:6px;border-radius:8px;font-size:13px;cursor:pointer;color:var(--text3);transition:all .2s}
+.tab.active{background:var(--surface2);color:var(--text);font-weight:500}
+.tab:hover:not(.active){color:var(--text2)}
+.filter-section{padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.filter-row{display:flex;gap:8px;margin-bottom:8px}
+.filter-row:last-child{margin-bottom:0}
+.filter-group{flex:1}
+.filter-label{font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:500;text-transform:uppercase;letter-spacing:.5px}
+.filter-group select,.filter-group input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 8px;color:var(--text);font-size:12px;font-family:'DM Sans',sans-serif;outline:none}
+.filter-group select:focus,.filter-group input:focus{border-color:var(--accent)}
+.filter-group select option{background:var(--surface)}
+.range-row{display:flex;gap:6px;align-items:center}
+.range-sep{color:var(--text3);font-size:12px}
+.props-list{flex:1;overflow-y:auto;padding:8px}
+.props-list::-webkit-scrollbar{width:4px}
+.props-list::-webkit-scrollbar-track{background:transparent}
+.props-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.prop-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px;cursor:pointer;transition:all .2s;position:relative}
+.prop-card:hover{border-color:var(--accent);background:var(--surface3)}
+.prop-card.active{border-color:var(--accent);background:var(--surface3)}
+.prop-card-header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px}
+.prop-card-addr{font-size:13px;font-weight:500;color:var(--text);line-height:1.3;flex:1}
+.status-badge{font-size:10px;padding:3px 7px;border-radius:20px;font-weight:600;flex-shrink:0;white-space:nowrap}
+.status-0{background:rgba(79,124,255,.15);color:#7aa3ff}
+.status-1{background:rgba(46,184,122,.15);color:#3dd68c}
+.status-2{background:rgba(224,82,82,.15);color:#e07070}
+.status-3{background:rgba(234,179,8,.15);color:#ca9d00}
+.prop-card-meta{display:flex;gap:10px;flex-wrap:wrap}
+.meta-item{font-size:11px;color:var(--text3);display:flex;align-items:center;gap:3px}
+.meta-val{color:var(--text2);font-weight:500}
+.prop-card-price{font-size:15px;font-weight:600;color:var(--accent);margin-top:6px}
+.prop-card-thumb{display:flex;gap:4px;margin-top:8px}
+.prop-card-thumb img{width:48px;height:36px;object-fit:cover;border-radius:5px;border:1px solid var(--border)}
+.empty-state{text-align:center;padding:40px 20px;color:var(--text3)}
+.empty-state .eico{font-size:32px;margin-bottom:10px}
+.empty-state p{font-size:13px;line-height:1.6}
+.stats-bar{padding:10px 16px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:16px}
+.stat{text-align:center}
+.stat-val{font-size:16px;font-weight:600;color:var(--text)}
+.stat-lbl{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}
+
+/* MAP */
+#map{flex:1;z-index:1}
+.leaflet-container{background:#e8e0d8}
+
+/* MAP CONTROLS */
+.map-controls{position:absolute;right:16px;bottom:30px;z-index:500;display:flex;flex-direction:column;gap:6px}
+.map-btn{width:36px;height:36px;background:#fff;border:1px solid #ddd;border-radius:var(--radius);display:flex;align-items:center;justify-content:center;cursor:pointer;color:#555;font-size:16px;transition:all .2s;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.map-btn:hover{background:var(--surface2);color:var(--text);border-color:var(--accent)}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);width:100%;max-width:560px;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;transform:translateY(16px);transition:transform .2s}
+.modal-overlay.open .modal{transform:translateY(0)}
+.modal-header{padding:18px 20px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.modal-title{font-family:'DM Serif Display',serif;font-size:18px;color:var(--text)}
+.modal-close{width:30px;height:30px;border-radius:8px;background:transparent;border:none;color:var(--text3);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;transition:all .2s}
+.modal-close:hover{background:var(--surface2);color:var(--text)}
+.modal-body{padding:20px;overflow-y:auto;flex:1}
+.modal-body::-webkit-scrollbar{width:4px}
+.modal-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-group{display:flex;flex-direction:column;gap:5px}
+.form-group.full{grid-column:1/-1}
+.form-group label{font-size:12px;font-weight:500;color:var(--text3);letter-spacing:.3px}
+.form-group input,.form-group select,.form-group textarea{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 11px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;outline:none;transition:border .2s}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--accent)}
+.form-group select option{background:var(--surface)}
+.form-group textarea{resize:vertical;min-height:70px;line-height:1.5}
+.status-select-wrap{display:flex;gap:6px}
+.status-opt{flex:1;padding:7px;border-radius:8px;border:1px solid var(--border);text-align:center;font-size:12px;cursor:pointer;transition:all .2s;color:var(--text3)}
+.status-opt.sel-0{border-color:#4f7cff;background:rgba(79,124,255,.15);color:#7aa3ff}
+.status-opt.sel-1{border-color:#2eb87a;background:rgba(46,184,122,.15);color:#3dd68c}
+.status-opt.sel-2{border-color:#e05252;background:rgba(224,82,82,.15);color:#e07070}
+.status-opt.sel-3{border-color:#ca9d00;background:rgba(234,179,8,.15);color:#ca9d00}
+.status-opt:hover:not(.sel-0):not(.sel-1):not(.sel-2):not(.sel-3){background:var(--surface2);color:var(--text)}
+.photo-upload-area{border:1.5px dashed var(--border2);border-radius:var(--radius);padding:16px;text-align:center;cursor:pointer;transition:all .2s;color:var(--text3);font-size:13px}
+.photo-upload-area:hover{border-color:var(--accent);color:var(--text2)}
+.photo-preview-wrap{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.photo-preview{position:relative;width:72px;height:56px}
+.photo-preview img{width:100%;height:100%;object-fit:cover;border-radius:6px;border:1px solid var(--border)}
+.photo-del{position:absolute;top:-5px;right:-5px;width:18px;height:18px;background:var(--red);border-radius:50%;border:none;color:#fff;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
+.modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0}
+.btn-danger{border-color:var(--red);color:var(--red)}
+.btn-danger:hover{background:rgba(224,82,82,.1)}
+
+/* VIEW MODAL - property detail */
+.view-addr{font-size:16px;font-weight:600;color:var(--text);margin-bottom:4px}
+.view-date{font-size:12px;color:var(--text3);margin-bottom:14px}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.info-item{background:var(--surface2);border-radius:8px;padding:10px 12px}
+.info-item .il{font-size:11px;color:var(--text3);margin-bottom:3px;font-weight:500}
+.info-item .iv{font-size:14px;font-weight:600;color:var(--text)}
+.price-big{font-size:24px;font-weight:700;color:var(--accent);margin-bottom:16px}
+.notes-box{background:var(--surface2);border-radius:8px;padding:12px;font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:14px}
+.photo-gallery{display:flex;flex-wrap:wrap;gap:8px}
+.photo-gallery img{height:80px;width:auto;border-radius:8px;border:1px solid var(--border);cursor:pointer;transition:transform .2s;object-fit:cover}
+.photo-gallery img:hover{transform:scale(1.04)}
+
+/* LIGHTBOX */
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;display:flex;align-items:center;justify-content:center;display:none}
+.lightbox.open{display:flex}
+.lightbox img{max-width:90vw;max-height:88vh;border-radius:var(--radius);object-fit:contain}
+.lightbox-close{position:fixed;top:20px;right:20px;width:36px;height:36px;background:var(--surface);border-radius:50%;border:1px solid var(--border2);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 18px;font-size:13px;color:var(--text2);z-index:99999;transition:transform .3s;pointer-events:none}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+/* LEGEND */
+.legend{position:absolute;left:16px;bottom:30px;z-index:500;background:#fff;border:none;border-radius:var(--radius);padding:10px 12px;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.legend-row{display:flex;align-items:center;gap:6px;margin-bottom:4px;color:#444}
+.legend-row:last-child{margin-bottom:0}
+.legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
+/* Leaflet overrides */
+.leaflet-popup-content-wrapper{background:#fff!important;border:none!important;border-radius:12px!important;box-shadow:0 4px 20px rgba(0,0,0,.18)!important;color:#202124!important;font-family:'DM Sans',sans-serif!important}
+.leaflet-popup-tip{background:#fff!important}
+.leaflet-popup-content{margin:10px 14px!important;font-size:13px!important;color:#202124!important}
+.leaflet-control-zoom{border:none!important;border-radius:var(--radius)!important;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.15)!important}
+.leaflet-control-zoom a{background:#fff!important;color:#333!important;border-bottom:1px solid #eee!important;font-size:16px!important}
+.leaflet-control-zoom a:hover{background:#f5f5f5!important}
+.leaflet-control-attribution{background:rgba(255,255,255,.8)!important;color:#666!important}
+.leaflet-control-attribution a{color:#555!important}
+
+/* Custom pin */
+.pin-marker{width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .15s}
+.pin-marker:hover{transform:rotate(-45deg) scale(1.15)}
+.pin-0{background:#4f7cff}
+.pin-1{background:#2eb87a}
+.pin-2{background:#e05252}
+
+.pin-label{transform:rotate(45deg);font-size:12px;color:#fff;font-weight:700}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-logo">The New Yorkers <span>Real Estate Tracker</span></div>
+  <div class="search-wrap">
+    <span class="si">🔍</span>
+    <input id="addr-search" type="text" placeholder="Αναζήτηση διεύθυνσης...">
+    <button id="search-clear" onclick="clearSearch()" style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px;padding:2px 4px">✕</button>
+    <div id="search-results"></div>
+  </div>
+  <div class="topbar-actions">
+    <button class="btn" onclick="toggleSidebar()">☰ Λίστα</button>
+    <button class="btn btn-primary" onclick="openAddModal()">+ Νέο Ακίνητο</button>
+    <button class="btn" onclick="exportExcel()">⬇ Export</button>
+  </div>
+</div>
+
+<div class="main" style="position:relative">
+  <!-- SIDEBAR -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-inner">
+      <div class="sidebar-header">
+        <div style="font-size:14px;font-weight:600;color:var(--text)">Ακίνητα</div>
+        <div class="sidebar-tabs">
+          <div class="tab active" onclick="switchTab(this,'list')" data-tab="list">Λίστα</div>
+          <div class="tab" onclick="switchTab(this,'filters')" data-tab="filters">Φίλτρα</div>
+        </div>
+      </div>
+      
+      <!-- FILTERS -->
+      <div class="filter-section" id="tab-filters" style="display:none">
+        <div class="filter-row">
+          <div class="filter-group">
+            <div class="filter-label">Κατάσταση</div>
+            <select id="f-status" onchange="applyFilters()">
+              <option value="">Όλες</option>
+              <option value="0">Υπό Εξέταση</option>
+              <option value="1">Ενδιαφέρον</option>
+              <option value="2">Απορρίφθηκε</option>
+              <option value="3">Πουλήθηκε</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <div class="filter-label">Ασανσέρ</div>
+            <select id="f-elevator" onchange="applyFilters()">
+              <option value="">Όλα</option>
+              <option value="ναι">Ναι</option>
+              <option value="όχι">Όχι</option>
+            </select>
+          </div>
+        </div>
+        <div class="filter-row">
+          <div class="filter-group">
+            <div class="filter-label">Τύπος</div>
+            <select id="f-type" onchange="applyFilters()">
+              <option value="">Όλοι</option>
+              <option value="μεσίτης">Μεσίτης</option>
+              <option value="ιδιώτης">Ιδιώτης</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <div class="filter-label">Όροφος</div>
+            <input id="f-floor" type="number" placeholder="π.χ. 2" onchange="applyFilters()">
+          </div>
+        </div>
+        <div class="filter-row">
+          <div class="filter-group">
+            <div class="filter-label">Τιμή (€)</div>
+            <div class="range-row">
+              <input id="f-price-min" type="number" placeholder="Από" onchange="applyFilters()" style="text-align:center">
+              <span class="range-sep">—</span>
+              <input id="f-price-max" type="number" placeholder="Έως" onchange="applyFilters()" style="text-align:center">
+            </div>
+          </div>
+        </div>
+        <div class="filter-row">
+          <div class="filter-group">
+            <div class="filter-label">Τ.μ.</div>
+            <div class="range-row">
+              <input id="f-sqm-min" type="number" placeholder="Από" onchange="applyFilters()" style="text-align:center">
+              <span class="range-sep">—</span>
+              <input id="f-sqm-max" type="number" placeholder="Έως" onchange="applyFilters()" style="text-align:center">
+            </div>
+          </div>
+        </div>
+        <div class="filter-row">
+          <div class="filter-group">
+            <div class="filter-label">Ταξινόμηση</div>
+            <select id="f-sort" onchange="applyFilters()">
+              <option value="date-desc">Νεότερο πρώτα</option>
+              <option value="date-asc">Παλαιότερο πρώτα</option>
+              <option value="price-asc">Τιμή (↑)</option>
+              <option value="price-desc">Τιμή (↓)</option>
+              <option value="sqm-asc">Τ.μ. (↑)</option>
+              <option value="sqm-desc">Τ.μ. (↓)</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn" style="width:100%;margin-top:4px;justify-content:center" onclick="clearFilters()">✕ Καθαρισμός φίλτρων</button>
+      </div>
+
+      <!-- LIST -->
+      <div class="props-list" id="tab-list">
+        <div class="empty-state" id="empty-msg">
+          <div class="eico">🏠</div>
+          <p>Δεν υπάρχουν ακίνητα.<br>Κάντε κλικ στον χάρτη ή πατήστε <strong>+ Νέο Ακίνητο</strong> για να ξεκινήσετε.</p>
+        </div>
+      </div>
+
+      <div class="stats-bar" id="stats-bar">
+        <div class="stat"><div class="stat-val" id="s-total">0</div><div class="stat-lbl">Σύνολο</div></div>
+        <div class="stat"><div class="stat-val" id="s-avg-price">—</div><div class="stat-lbl">Μέση Τιμή</div></div>
+        <div class="stat"><div class="stat-val" id="s-avg-sqm">—</div><div class="stat-lbl">Μέσο Τ.μ.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAP -->
+  <div id="map"></div>
+
+  <!-- MAP CONTROLS -->
+  <div class="map-controls">
+    <div class="map-btn" onclick="locateMe()" title="Εντοπισμός θέσης">📍</div>
+  </div>
+
+  <!-- LEGEND -->
+  <div class="legend">
+    <div class="legend-row"><div class="legend-dot" style="background:#4f7cff"></div>Υπό Εξέταση</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#2eb87a"></div>Ενδιαφέρον</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#e05252"></div>Απορρίφθηκε</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#ca9d00"></div>Πουλήθηκε</div>
+  </div>
+</div>
+
+<!-- ADD/EDIT MODAL -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title-text">Νέο Ακίνητο</div>
+      <button class="modal-close" onclick="closeEditModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Ημερομηνία</label>
+          <input type="date" id="f-date">
+        </div>
+        <div class="form-group">
+          <label>Τιμή (€)</label>
+          <input type="number" id="f-price" placeholder="π.χ. 150000">
+        </div>
+        <div class="form-group full">
+          <label>Διεύθυνση</label>
+          <input type="text" id="f-address" placeholder="π.χ. Εγνατία 50, Θεσσαλονίκη">
+        </div>
+        <div class="form-group">
+          <label>Τετραγωνικά (τ.μ.)</label>
+          <input type="number" id="f-sqm" placeholder="π.χ. 85">
+        </div>
+        <div class="form-group">
+          <label>Όροφος</label>
+          <input type="number" id="f-floor-inp" placeholder="π.χ. 3">
+        </div>
+        <div class="form-group">
+          <label>Ασανσέρ</label>
+          <select id="f-elev">
+            <option value="">—</option>
+            <option value="Ναι">Ναι</option>
+            <option value="Όχι">Όχι</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Μεσίτης / Ιδιώτης</label>
+          <select id="f-owner">
+            <option value="">—</option>
+            <option value="Μεσίτης">Μεσίτης</option>
+            <option value="Ιδιώτης">Ιδιώτης</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label>Τηλέφωνο</label>
+          <input type="tel" id="f-phone" placeholder="π.χ. 6912345678">
+        </div>
+        <div class="form-group full">
+          <label>Κατάσταση</label>
+          <div class="status-select-wrap">
+            <div class="status-opt sel-0" onclick="selectStatus(0)" id="s-opt-0">Υπό Εξέταση</div>
+            <div class="status-opt" onclick="selectStatus(1)" id="s-opt-1">Ενδιαφέρον</div>
+            <div class="status-opt" onclick="selectStatus(2)" id="s-opt-2">Απορρίφθηκε</div>
+            <div class="status-opt" onclick="selectStatus(3)" id="s-opt-3">Πουλήθηκε</div>
+          </div>
+        </div>
+        <div class="form-group full">
+          <label>Σημειώσεις</label>
+          <textarea id="f-notes" placeholder="Ελεύθερες σημειώσεις για το ακίνητο..."></textarea>
+        </div>
+        <div class="form-group full">
+          <label>Φωτογραφίες</label>
+          <div class="photo-upload-area" onclick="document.getElementById('photo-input').click()">
+            📷 Κάντε κλικ για προσθήκη φωτογραφιών
+          </div>
+          <input type="file" id="photo-input" multiple accept="image/*" style="display:none" onchange="handlePhotos(event)">
+          <div class="photo-preview-wrap" id="photo-preview"></div>
+        </div>
+        <div class="form-group full">
+          <label>Σύνδεσμος Street View</label>
+          <input type="url" id="f-streetview" placeholder="Google Maps Street View URL (προαιρετικό)">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="del-btn" style="display:none;margin-right:auto" onclick="deleteProperty()">🗑 Διαγραφή</button>
+      <button class="btn" onclick="closeEditModal()">Ακύρωση</button>
+      <button class="btn btn-primary" onclick="saveProperty()">💾 Αποθήκευση</button>
+    </div>
+  </div>
+</div>
+
+<!-- VIEW MODAL -->
+<div class="modal-overlay" id="view-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Ακίνητο</div>
+      <button class="modal-close" onclick="closeViewModal()">✕</button>
+    </div>
+    <div class="modal-body" id="view-modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeViewModal()">Κλείσιμο</button>
+      <button class="btn btn-primary" id="view-edit-btn">✏ Επεξεργασία</button>
+    </div>
+  </div>
+</div>
+
+<!-- LIGHTBOX -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+  <img id="lightbox-img" src="" alt="">
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ---- STATE ----
+let properties = [];
+let markers = {};
+let selectedStatus = 0;
+let editingId = null;
+let editPhotos = [];
+let pendingLatLng = null;
+let map;
+let filteredIds = null;
+
+// ---- STORAGE ----
+async function saveToStorage(){
+  try{
+    const data = properties.map(p=>({...p,photos:[]}));
+    await window.storage.set('re-properties', JSON.stringify(data));
+    // save photos separately per property
+    for(const p of properties){
+      if(p.photos && p.photos.length){
+        await window.storage.set('re-photos-'+p.id, JSON.stringify(p.photos));
+      }
+    }
+  }catch(e){localStorage.setItem('re-properties-fallback',JSON.stringify(properties))}
+}
+async function loadFromStorage(){
+  try{
+    const r = await window.storage.get('re-properties');
+    if(r && r.value){
+      properties = JSON.parse(r.value);
+      for(const p of properties){
+        try{
+          const pr = await window.storage.get('re-photos-'+p.id);
+          if(pr && pr.value) p.photos = JSON.parse(pr.value);
+          else p.photos = [];
+        }catch(e){p.photos=[]}
+      }
+    }
+  }catch(e){
+    try{const d=localStorage.getItem('re-properties-fallback');if(d)properties=JSON.parse(d);}catch(e2){}
+  }
+}
+
+// ---- MAP INIT ----
+function initMap(){
+  map = L.map('map',{zoomControl:true,center:[40.6401,22.9444],zoom:14});
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',maxZoom:19
+  }).addTo(map);
+  map.on('click',function(e){
+    pendingLatLng = e.latlng;
+    openAddModal(e.latlng);
+  });
+}
+
+// ---- MARKERS ----
+function createMarkerIcon(status){
+  const colors=['#4f7cff','#2eb87a','#e05252','#ca9d00'];
+  const c=colors[status]||colors[0];
+  return L.divIcon({
+    className:'',
+    html:`<div style="width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${c};border:3px solid rgba(255,255,255,0.4);box-shadow:0 2px 8px rgba(0,0,0,0.4)">
+      <div style="transform:rotate(45deg);text-align:center;line-height:22px;font-size:11px;color:#fff;font-weight:700">🏠</div></div>`,
+    iconSize:[28,28],iconAnchor:[14,28],popupAnchor:[0,-30]
+  });
+}
+function addMarker(prop){
+  const m=L.marker([prop.lat,prop.lng],{icon:createMarkerIcon(prop.status||0)}).addTo(map);
+  m.on('click',function(){showViewModal(prop.id)});
+  markers[prop.id]=m;
+}
+function removeMarker(id){
+  if(markers[id]){map.removeLayer(markers[id]);delete markers[id];}
+}
+function updateMarker(prop){
+  removeMarker(prop.id);
+  addMarker(prop);
+}
+
+// ---- ADD/EDIT MODAL ----
+function openAddModal(latlng){
+  editingId=null;
+  editPhotos=[];
+  document.getElementById('modal-title-text').textContent='Νέο Ακίνητο';
+  document.getElementById('del-btn').style.display='none';
+  document.getElementById('f-date').value=new Date().toISOString().split('T')[0];
+  document.getElementById('f-address').value='';
+  document.getElementById('f-price').value='';
+  document.getElementById('f-sqm').value='';
+  document.getElementById('f-floor-inp').value='';
+  document.getElementById('f-elev').value='';
+  document.getElementById('f-owner').value='';
+  document.getElementById('f-phone').value='';
+  document.getElementById('f-notes').value='';
+  document.getElementById('f-streetview').value='';
+  document.getElementById('photo-preview').innerHTML='';
+  selectStatus(0);
+  if(latlng && !document.getElementById('f-address').value){
+    reverseGeocode(latlng.lat,latlng.lng).then(addr=>{
+      document.getElementById('f-address').value=addr;
+    });
+  }
+  document.getElementById('edit-modal').classList.add('open');
+}
+function openEditModal(id){
+  const p=properties.find(x=>x.id===id);
+  if(!p)return;
+  editingId=id;
+  editPhotos=[...(p.photos||[])];
+  document.getElementById('modal-title-text').textContent='Επεξεργασία Ακινήτου';
+  document.getElementById('del-btn').style.display='flex';
+  document.getElementById('f-date').value=p.date||'';
+  document.getElementById('f-address').value=p.address||'';
+  document.getElementById('f-price').value=p.price||'';
+  document.getElementById('f-sqm').value=p.sqm||'';
+  document.getElementById('f-floor-inp').value=p.floor||'';
+  document.getElementById('f-elev').value=p.elevator||'';
+  document.getElementById('f-owner').value=p.owner||'';
+  document.getElementById('f-phone').value=p.phone||'';
+  document.getElementById('f-notes').value=p.notes||'';
+  document.getElementById('f-streetview').value=p.streetview||'';
+  selectStatus(p.status||0);
+  renderPhotoPreview();
+  closeViewModal();
+  document.getElementById('edit-modal').classList.add('open');
+}
+function closeEditModal(){
+  document.getElementById('edit-modal').classList.remove('open');
+  pendingLatLng=null;
+}
+function selectStatus(n){
+  selectedStatus=n;
+  [0,1,2,3].forEach(i=>{
+    const el=document.getElementById('s-opt-'+i);
+    el.className='status-opt'+(i===n?' sel-'+i:'');
+  });
+}
+
+// ---- PHOTOS ----
+function handlePhotos(e){
+  const files=Array.from(e.target.files);
+  files.forEach(f=>{
+    const reader=new FileReader();
+    reader.onload=ev=>{editPhotos.push(ev.target.result);renderPhotoPreview();}
+    reader.readAsDataURL(f);
+  });
+  e.target.value='';
+}
+function renderPhotoPreview(){
+  const wrap=document.getElementById('photo-preview');
+  wrap.innerHTML='';
+  editPhotos.forEach((src,i)=>{
+    const d=document.createElement('div');
+    d.className='photo-preview';
+    d.innerHTML=`<img src="${src}"><button class="photo-del" onclick="removePhoto(${i})">✕</button>`;
+    wrap.appendChild(d);
+  });
+}
+function removePhoto(i){editPhotos.splice(i,1);renderPhotoPreview();}
+
+// ---- SAVE / DELETE ----
+function saveProperty(){
+  const addr=document.getElementById('f-address').value.trim();
+  if(!addr){showToast('Παρακαλώ εισάγετε διεύθυνση');return;}
+  if(editingId){
+    const p=properties.find(x=>x.id===editingId);
+    if(!p)return;
+    p.date=document.getElementById('f-date').value;
+    p.address=addr;
+    p.price=document.getElementById('f-price').value;
+    p.sqm=document.getElementById('f-sqm').value;
+    p.floor=document.getElementById('f-floor-inp').value;
+    p.elevator=document.getElementById('f-elev').value;
+    p.owner=document.getElementById('f-owner').value;
+    p.phone=document.getElementById('f-phone').value;
+    p.notes=document.getElementById('f-notes').value;
+    p.streetview=document.getElementById('f-streetview').value;
+    p.status=selectedStatus;
+    p.photos=[...editPhotos];
+    updateMarker(p);
+    saveToStorage();
+    renderList();
+    closeEditModal();
+    showToast('Ακίνητο ενημερώθηκε ✓');
+  } else {
+    const latlng=pendingLatLng||{lat:40.6401,lng:22.9444};
+    const id='prop-'+Date.now();
+    const prop={
+      id,lat:latlng.lat,lng:latlng.lng,
+      date:document.getElementById('f-date').value,
+      address:addr,
+      price:document.getElementById('f-price').value,
+      sqm:document.getElementById('f-sqm').value,
+      floor:document.getElementById('f-floor-inp').value,
+      elevator:document.getElementById('f-elev').value,
+      owner:document.getElementById('f-owner').value,
+      phone:document.getElementById('f-phone').value,
+      notes:document.getElementById('f-notes').value,
+      streetview:document.getElementById('f-streetview').value,
+      status:selectedStatus,
+      photos:[...editPhotos]
+    };
+    if(!pendingLatLng){
+      geocodeAddress(addr).then(latlng2=>{
+        if(latlng2){prop.lat=latlng2.lat;prop.lng=latlng2.lng;}
+        properties.push(prop);
+        addMarker(prop);
+        saveToStorage();
+        renderList();
+        map.setView([prop.lat,prop.lng],16);
+      });
+    } else {
+      properties.push(prop);
+      addMarker(prop);
+      saveToStorage();
+      renderList();
+    }
+    closeEditModal();
+    showToast('Ακίνητο προστέθηκε ✓');
+  }
+}
+function deleteProperty(){
+  if(!editingId)return;
+  if(!confirm('Διαγραφή αυτού του ακινήτου;'))return;
+  removeMarker(editingId);
+  properties=properties.filter(x=>x.id!==editingId);
+  saveToStorage();
+  renderList();
+  closeEditModal();
+  showToast('Ακίνητο διαγράφηκε');
+}
+
+// ---- VIEW MODAL ----
+function showViewModal(id){
+  const p=properties.find(x=>x.id===id);
+  if(!p)return;
+  const statLabels=['Υπό Εξέταση','Ενδιαφέρον','Απορρίφθηκε','Πουλήθηκε'];
+  const statClass=['status-0','status-1','status-2','status-3'];
+  let photosHtml='';
+  if(p.photos&&p.photos.length){
+    photosHtml=`<div style="margin-bottom:14px"><div style="font-size:12px;color:var(--text3);margin-bottom:8px;font-weight:500">ΦΩΤΟΓΡΑΦΙΕΣ</div>
+    <div class="photo-gallery">${p.photos.map((src,i)=>`<img src="${src}" onclick="openLightbox('${p.id}',${i})">`).join('')}</div></div>`;
+  }
+  let svBtn='';
+  if(p.streetview){svBtn=`<a href="${p.streetview}" target="_blank" class="btn" style="margin-bottom:14px;display:inline-flex">🌍 Street View</a>`;}
+  document.getElementById('view-modal-body').innerHTML=`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <div class="view-addr">${p.address||'—'}</div>
+      <span class="status-badge ${statClass[p.status||0]}">${statLabels[p.status||0]}</span>
+    </div>
+    <div class="view-date">📅 ${p.date||'—'}</div>
+    ${p.price?`<div class="price-big">€${Number(p.price).toLocaleString('el-GR')}</div>`:''}
+    <div class="info-grid">
+      <div class="info-item"><div class="il">Τετραγωνικά</div><div class="iv">${p.sqm?p.sqm+' τ.μ.':'—'}</div></div>
+      <div class="info-item"><div class="il">Όροφος</div><div class="iv">${p.floor||'—'}</div></div>
+      <div class="info-item"><div class="il">Ασανσέρ</div><div class="iv">${p.elevator||'—'}</div></div>
+      <div class="info-item"><div class="il">Μεσίτης/Ιδιώτης</div><div class="iv">${p.owner||'—'}</div></div>
+      ${p.phone?`<div class="info-item" style="grid-column:1/-1"><div class="il">Τηλέφωνο</div><div class="iv"><a href="tel:${p.phone}" style="color:var(--accent)">${p.phone}</a></div></div>`:''}
+    </div>
+    ${p.notes?`<div style="font-size:12px;color:var(--text3);margin-bottom:6px;font-weight:500">ΣΗΜΕΙΩΣΕΙΣ</div><div class="notes-box">${p.notes}</div>`:''}
+    ${svBtn}
+    ${photosHtml}
+    ${p.sqm&&p.price?`<div style="font-size:12px;color:var(--text3);margin-top:8px">Τιμή/τ.μ.: <strong style="color:var(--text2)">€${Math.round(p.price/p.sqm).toLocaleString('el-GR')}</strong></div>`:''}
+  `;
+  document.getElementById('view-edit-btn').onclick=()=>openEditModal(id);
+  document.getElementById('view-modal').classList.add('open');
+  // fly to marker
+  if(markers[id]) map.setView([p.lat,p.lng],17);
+}
+function closeViewModal(){document.getElementById('view-modal').classList.remove('open');}
+
+// ---- LIGHTBOX ----
+function openLightbox(propId, idx){
+  const p=properties.find(x=>x.id===propId);
+  if(!p||!p.photos[idx])return;
+  document.getElementById('lightbox-img').src=p.photos[idx];
+  document.getElementById('lightbox').classList.add('open');
+}
+function closeLightbox(){document.getElementById('lightbox').classList.remove('open');}
+
+// ---- LIST ----
+function getFilteredProps(){
+  let list=[...properties];
+  const fs=document.getElementById('f-status')?.value;
+  const fe=document.getElementById('f-elevator')?.value?.toLowerCase();
+  const ft=document.getElementById('f-type')?.value?.toLowerCase();
+  const ff=document.getElementById('f-floor')?.value;
+  const fpMin=document.getElementById('f-price-min')?.value;
+  const fpMax=document.getElementById('f-price-max')?.value;
+  const fsMin=document.getElementById('f-sqm-min')?.value;
+  const fsMax=document.getElementById('f-sqm-max')?.value;
+  const sort=document.getElementById('f-sort')?.value||'date-desc';
+  if(fs!=='')list=list.filter(p=>String(p.status||0)===fs);
+  if(fe)list=list.filter(p=>(p.elevator||'').toLowerCase().includes(fe));
+  if(ft)list=list.filter(p=>(p.owner||'').toLowerCase().includes(ft));
+  if(ff)list=list.filter(p=>String(p.floor)===ff);
+  if(fpMin)list=list.filter(p=>Number(p.price)>=Number(fpMin));
+  if(fpMax)list=list.filter(p=>Number(p.price)<=Number(fpMax));
+  if(fsMin)list=list.filter(p=>Number(p.sqm)>=Number(fsMin));
+  if(fsMax)list=list.filter(p=>Number(p.sqm)<=Number(fsMax));
+  list.sort((a,b)=>{
+    if(sort==='date-desc')return (b.date||'')>(a.date||'')?1:-1;
+    if(sort==='date-asc')return (a.date||'')>(b.date||'')?1:-1;
+    if(sort==='price-asc')return Number(a.price||0)-Number(b.price||0);
+    if(sort==='price-desc')return Number(b.price||0)-Number(a.price||0);
+    if(sort==='sqm-asc')return Number(a.sqm||0)-Number(b.sqm||0);
+    if(sort==='sqm-desc')return Number(b.sqm||0)-Number(a.sqm||0);
+    return 0;
+  });
+  return list;
+}
+function applyFilters(){renderList();}
+function clearFilters(){
+  ['f-status','f-elevator','f-type'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['f-floor','f-price-min','f-price-max','f-sqm-min','f-sqm-max'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('f-sort').value='date-desc';
+  renderList();
+}
+function renderList(){
+  const list=getFilteredProps();
+  const cont=document.getElementById('tab-list');
+  const empty=document.getElementById('empty-msg');
+  if(properties.length===0){empty.style.display='block';cont.querySelectorAll('.prop-card').forEach(c=>c.remove());}
+  else{
+    empty.style.display='none';
+    cont.querySelectorAll('.prop-card').forEach(c=>c.remove());
+    const statLabels=['Υπό Εξέταση','Ενδιαφέρον','Απορρίφθηκε','Πουλήθηκε'];
+    list.forEach(p=>{
+      const div=document.createElement('div');
+      div.className='prop-card';
+      div.dataset.id=p.id;
+      const thumbs=p.photos&&p.photos.length?
+        `<div class="prop-card-thumb">${p.photos.slice(0,3).map(s=>`<img src="${s}">`).join('')}</div>`:'';
+      div.innerHTML=`
+        <div class="prop-card-header">
+          <div class="prop-card-addr">${p.address||'Χωρίς διεύθυνση'}</div>
+          <span class="status-badge status-${p.status||0}">${statLabels[p.status||0]}</span>
+        </div>
+        <div class="prop-card-meta">
+          ${p.sqm?`<span class="meta-item">📐 <span class="meta-val">${p.sqm} τ.μ.</span></span>`:''}
+          ${p.floor?`<span class="meta-item">🏢 <span class="meta-val">${p.floor}ος</span></span>`:''}
+          ${p.elevator?`<span class="meta-item">🛗 <span class="meta-val">${p.elevator}</span></span>`:''}
+          ${p.owner?`<span class="meta-item">👤 <span class="meta-val">${p.owner}</span></span>`:''}
+        </div>
+        ${p.price?`<div class="prop-card-price">€${Number(p.price).toLocaleString('el-GR')}</div>`:''}
+        ${thumbs}
+      `;
+      div.addEventListener('click',()=>showViewModal(p.id));
+      cont.appendChild(div);
+    });
+  }
+  // stats
+  const prices=properties.filter(p=>p.price).map(p=>Number(p.price));
+  const sqms=properties.filter(p=>p.sqm).map(p=>Number(p.sqm));
+  document.getElementById('s-total').textContent=properties.length;
+  document.getElementById('s-avg-price').textContent=prices.length?'€'+Math.round(prices.reduce((a,b)=>a+b,0)/prices.length).toLocaleString('el-GR'):'—';
+  document.getElementById('s-avg-sqm').textContent=sqms.length?Math.round(sqms.reduce((a,b)=>a+b,0)/sqms.length)+' τ.μ.':'—';
+}
+
+// ---- ADDRESS SEARCH ----
+let searchTimeout;
+let locatorPin = null;
+
+function clearSearch(){
+  document.getElementById('addr-search').value='';
+  document.getElementById('search-results').style.display='none';
+  document.getElementById('search-clear').style.display='none';
+  if(locatorPin){map.removeLayer(locatorPin);locatorPin=null;}
+}
+
+document.getElementById('addr-search').addEventListener('input',function(){
+  clearTimeout(searchTimeout);
+  const q=this.value.trim();
+  document.getElementById('search-clear').style.display=q?'block':'none';
+  if(q.length<2){document.getElementById('search-results').style.display='none';return;}
+  searchTimeout=setTimeout(()=>searchAddress(q),350);
+});
+document.addEventListener('click',function(e){
+  if(!e.target.closest('.search-wrap'))document.getElementById('search-results').style.display='none';
+});
+
+function getPlaceLabel(r){
+  // Split display_name into primary (street+number) and secondary (rest)
+  const parts=r.display_name.split(',');
+  const primary=parts.slice(0,2).join(',').trim();
+  const secondary=parts.slice(2).join(',').trim();
+  return{primary,secondary};
+}
+
+async function searchAddress(q){
+  try{
+    const res=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q+' Θεσσαλονίκη')}&limit=6&accept-language=el&addressdetails=1`);
+    const data=await res.json();
+    const box=document.getElementById('search-results');
+    box.innerHTML='';
+    if(!data.length){box.style.display='none';return;}
+    data.forEach(r=>{
+      const {primary,secondary}=getPlaceLabel(r);
+      const item=document.createElement('div');
+      item.className='sr-item';
+      item.innerHTML=`<div class="sr-icon">📍</div>
+        <div class="sr-main">
+          <div class="sr-name">${primary}</div>
+          ${secondary?`<div class="sr-sub">${secondary}</div>`:''}
+        </div>`;
+      item.addEventListener('click',()=>{
+        const lat=parseFloat(r.lat),lng=parseFloat(r.lon);
+        map.setView([lat,lng],17);
+        document.getElementById('addr-search').value=primary;
+        document.getElementById('search-clear').style.display='block';
+        box.style.display='none';
+        // Drop red locator pin
+        if(locatorPin)map.removeLayer(locatorPin);
+        const redIcon=L.divIcon({
+          className:'',
+          html:`<div style="display:flex;flex-direction:column;align-items:center">
+            <div style="width:22px;height:22px;background:#e05252;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35)"></div>
+            <div style="width:3px;height:14px;background:#e05252;margin-top:-1px;border-radius:0 0 2px 2px"></div>
+          </div>`,
+          iconSize:[22,36],iconAnchor:[11,36],popupAnchor:[0,-36]
+        });
+        locatorPin=L.marker([lat,lng],{icon:redIcon}).addTo(map);
+        locatorPin.bindPopup(`<b>${primary}</b>${secondary?'<br><span style="color:var(--text2);font-size:12px">'+secondary+'</span>':''}`).openPopup();
+      });
+      box.appendChild(item);
+    });
+    box.style.display='block';
+  }catch(e){}
+}
+async function geocodeAddress(addr){
+  try{
+    const res=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&limit=1`);
+    const data=await res.json();
+    if(data.length)return{lat:parseFloat(data[0].lat),lng:parseFloat(data[0].lon)};
+  }catch(e){}
+  return null;
+}
+async function reverseGeocode(lat,lng){
+  try{
+    const res=await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=el`);
+    const data=await res.json();
+    return data.display_name||'';
+  }catch(e){return '';}
+}
+
+// ---- SIDEBAR ----
+function toggleSidebar(){
+  const s=document.getElementById('sidebar');
+  s.classList.toggle('collapsed');
+}
+function switchTab(el,tab){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-list').style.display=tab==='list'?'':'none';
+  document.getElementById('tab-filters').style.display=tab==='filters'?'block':'none';
+}
+
+// ---- LOCATE ----
+function locateMe(){
+  map.locate({setView:true,maxZoom:16});
+}
+
+// ---- EXPORT ----
+function exportExcel(){
+  if(!properties.length){showToast('Δεν υπάρχουν ακίνητα για εξαγωγή');return;}
+  const statLabels=['Υπό Εξέταση','Ενδιαφέρον','Απορρίφθηκε','Πουλήθηκε'];
+  const rows=properties.map(p=>({
+    'Ημερομηνία':p.date||'',
+    'Διεύθυνση':p.address||'',
+    'Τιμή (€)':p.price||'',
+    'Τετραγωνικά':p.sqm||'',
+    'Όροφος':p.floor||'',
+    'Ασανσέρ':p.elevator||'',
+    'Μεσίτης/Ιδιώτης':p.owner||'',
+    'Τηλέφωνο':p.phone||'',
+    'Κατάσταση':statLabels[p.status||0],
+    'Σημειώσεις':p.notes||'',
+    'Street View':p.streetview||'',
+    'Lat':p.lat,'Lng':p.lng
+  }));
+  const ws=XLSX.utils.json_to_sheet(rows);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Ακίνητα');
+  XLSX.writeFile(wb,'thessaloniki-real-estate.xlsx');
+  showToast('Εξαγωγή Excel ✓');
+}
+
+// ---- TOAST ----
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+// ---- INIT ----
+async function init(){
+  initMap();
+  await loadFromStorage();
+  properties.forEach(p=>addMarker(p));
+  renderList();
+}
+init();
+</script>
+</body>
+</html>

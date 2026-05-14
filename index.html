@@ -388,6 +388,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
           <div class="photo-previews" id="photo-preview"></div>
         </div>
         <div class="fg full"><label>Street View URL</label><input type="url" id="f-streetview" placeholder="Google Maps Street View link"></div>
+        <div class="fg full"><label>Βίντεο URL</label><input type="url" id="f-video" placeholder="YouTube ή Google Drive link"></div>
       </div>
     </div>
     <div class="modal-footer">
@@ -586,7 +587,7 @@ function openAddModal(latlng){
   document.getElementById('modal-title-text').textContent='Νέο Ακίνητο';
   document.getElementById('del-btn').style.display='none';
   document.getElementById('f-date').value=new Date().toISOString().split('T')[0];
-  ['f-address','f-price','f-sqm','f-floor-inp','f-phone','f-notes','f-streetview'].forEach(id=>document.getElementById(id).value='');
+  ['f-address','f-price','f-sqm','f-floor-inp','f-phone','f-notes','f-streetview','f-video'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('f-elev').value='';
   document.getElementById('f-owner').value='';
   document.getElementById('photo-preview').innerHTML='';
@@ -609,6 +610,7 @@ function openEditModal(id){
   document.getElementById('f-phone').value=p.phone||'';
   document.getElementById('f-notes').value=p.notes||'';
   document.getElementById('f-streetview').value=p.streetview||'';
+  document.getElementById('f-video').value=p.video||'';
   selectStatus(p.status||0);
   renderPhotoPreviews();
   closeViewModal();
@@ -662,6 +664,7 @@ async function saveProperty(){
     phone:document.getElementById('f-phone').value,
     notes:document.getElementById('f-notes').value,
     streetview:document.getElementById('f-streetview').value,
+    video:document.getElementById('f-video').value,
     status:selectedStatus,
     photos:[...editPhotos]
   };
@@ -705,6 +708,7 @@ function showViewModal(id){
     </div>
     ${p.notes?`<div style="margin-bottom:12px"><div class="view-section-title">Σημειώσεις</div><div class="view-notes">${p.notes}</div></div>`:''}
     ${p.streetview?`<a href="${p.streetview}" target="_blank" class="btn" style="margin-bottom:12px;text-decoration:none;display:flex">🌍 Street View</a>`:''}
+    ${p.video?`<a href="${p.video}" target="_blank" class="btn" style="margin-bottom:12px;text-decoration:none;display:flex">🎬 Βίντεο</a>`:''}
     ${photos}
     ${p.sqm&&p.price?`<div style="font-size:12px;color:var(--text3);margin-top:4px">Τιμή/τ.μ.: <strong style="color:var(--text2)">€${Math.round(p.price/p.sqm).toLocaleString('el-GR')}</strong></div>`:''}
   `;
@@ -803,7 +807,7 @@ function locateMe(){map.locate({setView:true,maxZoom:16});}
 function exportExcel(){
   if(!properties.length){showToast('Δεν υπάρχουν ακίνητα');return;}
   try{
-    const rows=properties.map(p=>({'Ημερομηνία':p.date||'','Διεύθυνση':p.address||'','Τιμή':p.price||'','Τ.μ.':p.sqm||'','Όροφος':p.floor||'','Ασανσέρ':p.elevator||'','Τύπος':p.owner||'','Τηλέφωνο':p.phone||'','Κατάσταση':SL[p.status||0],'Σημειώσεις':p.notes||'','Street View':p.streetview||''}));
+    const rows=properties.map(p=>({'Ημερομηνία':p.date||'','Διεύθυνση':p.address||'','Τιμή':p.price||'','Τ.μ.':p.sqm||'','Όροφος':p.floor||'','Ασανσέρ':p.elevator||'','Τύπος':p.owner||'','Τηλέφωνο':p.phone||'','Κατάσταση':SL[p.status||0],'Σημειώσεις':p.notes||'','Street View':p.streetview||'','Βίντεο':p.video||''}));
     const ws=XLSX.utils.json_to_sheet(rows);
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws,'Ακίνητα');

@@ -540,8 +540,8 @@ async function doSearch(q){
     const box=document.getElementById('search-results');
     box.innerHTML='';
     // Show matching saved properties first
-    const qLow=q.toLowerCase();
-    const matched=properties.filter(p=>p.address&&p.address.toLowerCase().includes(qLow));
+    const qLow=q.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    const matched=properties.filter(p=>p.address&&p.address.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').includes(qLow));
     const sc=['#4f7cff','#2eb87a','#e05252','#ca9d00'];
     matched.forEach(p=>{
       const item=document.createElement('div');
